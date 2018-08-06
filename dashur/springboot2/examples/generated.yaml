@@ -1,0 +1,109 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: parquet-processor
+    ksonnet.io/component: parquet-processor
+    type: app
+    version: DAS-123
+  name: parquet-processor
+spec:
+  ports:
+  - name: web
+    port: 80
+    targetPort: containerPort
+  selector:
+    app: parquet-processor
+  type: ClusterIP
+---
+apiVersion: v1
+data:
+  secret: QUJD
+kind: Secret
+metadata:
+  labels:
+    app: parquet-processor
+    ksonnet.io/component: parquet-processor
+  name: parquet-processor_DAS-123
+  namespace: dev
+type: Opaque
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: parquet-processor
+    ksonnet.io/component: parquet-processor
+    type: app
+    version: DAS-123
+  name: parquet-processor
+  namespace: dev
+spec:
+  minReadySeconds: 20
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      labels:
+        app: parquet-processor
+      namespace: dev
+    spec:
+      containers:
+      - env:
+        - name: APP_NAME
+          value: parquet-processor
+        - name: APP_VERSION
+          value: DAS-123
+        - name: CONFIG_FILES
+          value: /conf/dashur-2.config.yaml,/conf/dashur.processor-transaction-parquet.config.yaml
+        - name: FLUENTD_HOST
+          value: fluentd-logger.kube-system.svc.cluster.local
+        - name: MAX_HEAP_SPACE
+          value: 2048M
+        - name: MIN_HEAP_SPACE
+          value: 2048M
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: JAVA_OPTS
+          value: -Djava.net.preferIPv4Stack=true
+        image: kube-registry.kube-system.svc.dev-cluster:5000/dashur/app-processor-transaction-parquet:DAS-123
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 120
+          timeoutSeconds: 2
+        name: app
+        ports:
+        - containerPort: 8080
+          name: containerPort
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 20
+          timeoutSeconds: 2
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2200Mi
+        volumeMounts:
+        - mountPath: /conf
+          name: config-volume
+          readOnly: true
+        - mountPath: /data
+          name: data
+          readOnly: false
+      securityContext:
+        fsGroup: 9999
+      volumes:
+      - configMap:
+          name: parquet-processorDAS-123
+        name: config-volume
+      - name: data
+        nfs:
+          path: /
+          server: nfs-reportingdev.svc.cluster.local
